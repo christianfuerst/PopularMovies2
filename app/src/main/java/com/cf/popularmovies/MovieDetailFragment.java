@@ -1,23 +1,26 @@
 package com.cf.popularmovies;
 
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.Fragment;
+import android.text.Html;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
 import android.widget.ImageView;
-import android.widget.ListAdapter;
-import android.widget.ListView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.cf.popularmovies.API.ReviewAPI;
 import com.cf.popularmovies.API.VideoAPI;
 import com.cf.popularmovies.model.MovieResult;
+import com.cf.popularmovies.model.ReviewPage;
+import com.cf.popularmovies.model.ReviewResult;
 import com.cf.popularmovies.model.Video;
 import com.cf.popularmovies.model.VideoResult;
 import com.squareup.picasso.Picasso;
@@ -31,13 +34,13 @@ import retrofit.RetrofitError;
 public class MovieDetailFragment extends Fragment {
 
     private static final String KEY_VIDEO_RESULT_DATA = "video_result_data";
-
-    private ListView listview;
-    private Bundle savedInstanceState;
+    private static final String KEY_REVIEW_RESULT_DATA = "review_result_data";
+    private LinearLayout linear_listView_video;
+    private LinearLayout linear_listView_review;
 
     private MovieResult result;
     private List<VideoResult> video_result_data = null;
-    private VideoResultAdapter videoResultAdapter;
+    private List<ReviewResult> review_result_data = null;
     private Boolean isTaskRunning;
 
     private TextView textView_movie_title;
@@ -45,6 +48,7 @@ public class MovieDetailFragment extends Fragment {
     private TextView textView_vote_average;
     private TextView textView_details;
     private TextView textView_video_unavailable;
+    private TextView textView_review_unavailable;
     private ImageView imageView_movie_header;
     private ImageView imageView_movie_poster_small;
 
@@ -55,8 +59,9 @@ public class MovieDetailFragment extends Fragment {
     public void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
 
-        // VideoResult data will be stored in ParcelableArrayList in order to prevent another API call
+        // VideoResult & Review data will be stored in ParcelableArrayList in order to prevent another API call
         outState.putParcelableArrayList(KEY_VIDEO_RESULT_DATA, new ArrayList<>(video_result_data));
+        outState.putParcelableArrayList(KEY_REVIEW_RESULT_DATA, new ArrayList<>(review_result_data));
     }
 
     @Override
@@ -68,9 +73,11 @@ public class MovieDetailFragment extends Fragment {
         textView_vote_average = (TextView) getActivity().findViewById(R.id.textView_vote_average);
         textView_details = (TextView) getActivity().findViewById(R.id.textView_details);
         textView_video_unavailable = (TextView) getActivity().findViewById(R.id.textView_video_unavailable);
+        textView_review_unavailable = (TextView) getActivity().findViewById(R.id.textView_review_unavailable);
         imageView_movie_header = (ImageView) getActivity().findViewById(R.id.imageView_movie_header);
         imageView_movie_poster_small = (ImageView) getActivity().findViewById(R.id.imageView_movie_poster_small);
-        listview = (ListView) getActivity().findViewById(R.id.listView_video);
+        linear_listView_video = (LinearLayout) getActivity().findViewById(R.id.linear_listView_video);
+        linear_listView_review = (LinearLayout) getActivity().findViewById(R.id.linear_listView_review);
 
         // Handle image loading for "BackDrop" image
         // If no image is available use a placeholder instead
@@ -109,38 +116,19 @@ public class MovieDetailFragment extends Fragment {
         if (savedInstanceState != null) {
             // Retrieve result data from ParcelableArrayList
             video_result_data = savedInstanceState.getParcelableArrayList(KEY_VIDEO_RESULT_DATA);
+            review_result_data = savedInstanceState.getParcelableArrayList(KEY_REVIEW_RESULT_DATA);
 
             // Use the custom adapter to the result data visible in the GUI
-            videoResultAdapter = new VideoResultAdapter(getActivity(), R.layout.item_listview_video, video_result_data);
-            listview.setAdapter(videoResultAdapter);
-
-            setListViewHeightBasedOnChildren(listview);
+            ShowVideoResults(video_result_data);
+            ShowReviewResults(review_result_data);
         }
         else
         // If no InstanceState is present, start the custom AsyncTask in order to retrieve data from the API
         {
-            FetchVideosTask fetchVideosTask = new FetchVideosTask();
-            fetchVideosTask.execute(result.getId().toString());
+            FetchMovieDataTask fetchMovieDataTask = new FetchMovieDataTask();
+            fetchMovieDataTask.execute(result.getId().toString());
         }
 
-        listview.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-
-                String youtube_video_id = videoResultAdapter.getItem(position).getKey();
-
-                try {
-                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:" + youtube_video_id));
-                    startActivity(intent);
-                } catch (ActivityNotFoundException ex) {
-                    Intent intent=new Intent(Intent.ACTION_VIEW,
-                            Uri.parse("http://www.youtube.com/watch?v=" + youtube_video_id));
-                    startActivity(intent);
-                }
-
-            }
-        });
     }
 
     @Override
@@ -159,7 +147,7 @@ public class MovieDetailFragment extends Fragment {
         return inflater.inflate(R.layout.fragment_movie_detail, container, false);
     }
 
-    private class FetchVideosTask extends AsyncTask<String, Void, List<VideoResult>> {
+    private class FetchMovieDataTask extends AsyncTask<String, Void, MovieData> {
 
         private final String API_KEY = getString(R.string.api_key);
         private String api_endpoint = "http://api.themoviedb.org/3";
@@ -175,9 +163,11 @@ public class MovieDetailFragment extends Fragment {
 
         // Use RetroFit to retrieve data from API
         @Override
-        protected List<VideoResult> doInBackground(String... params) {
+        protected MovieData doInBackground(String... params) {
 
+            MovieData movieData = new MovieData();
             Video video;
+            ReviewPage reviewPage;
 
             try {
 
@@ -189,31 +179,41 @@ public class MovieDetailFragment extends Fragment {
                 VideoAPI videoAPI = restAdapter.create(VideoAPI.class);
                 video = videoAPI.getVideo(API_KEY, params[0]);
 
+                ReviewAPI reviewAPI = restAdapter.create(ReviewAPI.class);
+                reviewPage = reviewAPI.getPage(API_KEY, params[0]);
+
             } catch (RetrofitError e) {
 
                 retrofitError = e;
                 video = new Video();
+                reviewPage = new ReviewPage();
 
             }
 
-            return video.getResults();
+            movieData.videoResults = video.getResults();
+            movieData.reviewResults = reviewPage.getResults();
+
+            return movieData;
         }
 
         @Override
-        protected void onPostExecute(List<VideoResult> videoResults) {
-            super.onPostExecute(videoResults);
+        protected void onPostExecute(MovieData movieData) {
+            super.onPostExecute(movieData);
 
-            video_result_data = FilterYouTubeVideos(videoResults);
+            video_result_data = FilterYouTubeVideos(movieData.videoResults);
+            review_result_data = movieData.reviewResults;
             Snackbar snackbar = null;
 
             // Use the custom adapter to the result data visible in the GUI
-            videoResultAdapter = new VideoResultAdapter(getActivity(), R.layout.item_listview_video, video_result_data);
-            listview.setAdapter(videoResultAdapter);
-
-            setListViewHeightBasedOnChildren(listview);
+            ShowVideoResults(video_result_data);
+            ShowReviewResults(review_result_data);
 
             if (video_result_data.isEmpty()) {
                 textView_video_unavailable.setVisibility(View.VISIBLE);
+            }
+
+            if (review_result_data.isEmpty()) {
+                textView_review_unavailable.setVisibility(View.VISIBLE);
             }
 
             // If the API call didn't work out as expected Snackbar will appear
@@ -226,8 +226,10 @@ public class MovieDetailFragment extends Fragment {
                     public void onClick(View v) {
                         if (!isTaskRunning) {
                             textView_video_unavailable.setVisibility(View.GONE);
-                            FetchVideosTask fetchVideosTask = new FetchVideosTask();
-                            fetchVideosTask.execute(result.getId().toString());
+                            textView_review_unavailable.setVisibility(View.GONE);
+
+                            FetchMovieDataTask fetchMovieDataTask = new FetchMovieDataTask();
+                            fetchMovieDataTask.execute(result.getId().toString());
                         }
                     }
                 });
@@ -273,28 +275,72 @@ public class MovieDetailFragment extends Fragment {
         return videoResults_youtube;
     }
 
-    // The ListView used in fragment_movie_detail.xml is nested
-    // into a ScrollView in order to avoid scrolling within the ListView
-    public static void setListViewHeightBasedOnChildren(ListView listView) {
-        ListAdapter listAdapter = listView.getAdapter();
-        if (listAdapter == null) {
-            // pre-condition
-            return;
+    // Helper function to show a list of available videos
+    public void ShowVideoResults(List<VideoResult> video_result_data) {
+
+        for (int i = 0; i < video_result_data.size(); i++) {
+
+            LayoutInflater layoutInflater;
+            layoutInflater = (LayoutInflater) getActivity().getApplicationContext()
+                    .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+
+            View view = layoutInflater.inflate(R.layout.item_listview_video, null);
+
+            TextView textView_video_name = (TextView)view.findViewById(R.id.textView_video_name);
+            final String name = video_result_data.get(i).getName();
+            final String youtube_video_id = video_result_data.get(i).getKey();
+            textView_video_name.setText(name);
+
+            linear_listView_video.addView(view);
+
+            linear_listView_video.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:" + youtube_video_id));
+                        startActivity(intent);
+                    } catch (ActivityNotFoundException ex) {
+                        Intent intent=new Intent(Intent.ACTION_VIEW,
+                                Uri.parse("http://www.youtube.com/watch?v=" + youtube_video_id));
+                        startActivity(intent);
+                    }
+
+                }
+            });
         }
 
-        int totalHeight = listView.getPaddingTop() + listView.getPaddingBottom();
-        for (int i = 0; i < listAdapter.getCount(); i++) {
-            View listItem = listAdapter.getView(i, null, listView);
-            if (listItem instanceof ViewGroup) {
-                listItem.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            }
-            listItem.measure(0, 0);
-            totalHeight += listItem.getMeasuredHeight();
+    }
+
+    // Helper function to show a list of available reviews
+    public void ShowReviewResults(List<ReviewResult> review_result_data) {
+
+        for (int i = 0; i < review_result_data.size(); i++) {
+
+            LayoutInflater layoutInflater;
+            layoutInflater = (LayoutInflater) getActivity().getApplicationContext()
+                    .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+
+            View view = layoutInflater.inflate(R.layout.item_listview_review, null);
+
+            TextView textView_review_author = (TextView)view.findViewById(R.id.textView_review_author);
+            TextView textView_review_content = (TextView)view.findViewById(R.id.textView_review_content);
+            final String author = review_result_data.get(i).getAuthor();
+            final String content = review_result_data.get(i).getContent();
+            textView_review_author.setText(getString(R.string.details_movie_review_by) + " " + author);
+            textView_review_content.setText(Html.fromHtml(content));
+
+            linear_listView_review.addView(view);
+
         }
 
-        ViewGroup.LayoutParams params = listView.getLayoutParams();
-        params.height = totalHeight + (listView.getDividerHeight() * (listAdapter.getCount() - 1));
-        listView.setLayoutParams(params);
+    }
+
+    public class MovieData {
+
+        private List<VideoResult> videoResults = new ArrayList<>();
+        private List<ReviewResult> reviewResults = new ArrayList<>();
+
     }
 
 }

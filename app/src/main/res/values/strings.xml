@@ -12,7 +12,10 @@
     <string name="vote_average_movie_detail">Vote Average:</string>
     <string name="details_movie_detail">Details:</string>
     <string name="details_movie_videos">Videos:</string>
+    <string name="details_movie_reviews">Reviews:</string>
     <string name="details_movie_videos_unavailable">No videos found.</string>
+    <string name="details_movie_reviews_unavailable">No reviews found.</string>
+    <string name="details_movie_review_by">by</string>
     <string name="movie_site_youtube">YouTube</string>
 
 </resources>

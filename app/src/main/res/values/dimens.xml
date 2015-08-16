@@ -6,4 +6,5 @@
     <dimen name="item_listview_play_button_margin">4dp</dimen>
     <dimen name="item_listview_play_text_margin">4dp</dimen>
     <dimen name="cardview_nested_content_padding">6dp</dimen>
+    <dimen name="cardview_divider_padding">6dp</dimen>
 </resources>
