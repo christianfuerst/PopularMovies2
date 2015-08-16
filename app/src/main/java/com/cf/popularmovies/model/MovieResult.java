@@ -8,7 +8,7 @@ import com.google.gson.annotations.SerializedName;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Result implements Parcelable {
+public class MovieResult implements Parcelable {
 
     @Expose
     private Boolean adult;
@@ -17,7 +17,7 @@ public class Result implements Parcelable {
     private String backdropPath;
     @SerializedName("genre_ids")
     @Expose
-    private List<Integer> genreIds = new ArrayList<Integer>();
+    private List<Integer> genreIds = new ArrayList<>();
     @Expose
     private Integer id;
     @SerializedName("original_language")
@@ -322,13 +322,13 @@ public class Result implements Parcelable {
         dest.writeValue(this.voteCount);
     }
 
-    public Result() {
+    public MovieResult() {
     }
 
-    protected Result(Parcel in) {
+    protected MovieResult(Parcel in) {
         this.adult = (Boolean) in.readValue(Boolean.class.getClassLoader());
         this.backdropPath = in.readString();
-        this.genreIds = new ArrayList<Integer>();
+        this.genreIds = new ArrayList<>();
         in.readList(this.genreIds, List.class.getClassLoader());
         this.id = (Integer) in.readValue(Integer.class.getClassLoader());
         this.originalLanguage = in.readString();
@@ -343,13 +343,13 @@ public class Result implements Parcelable {
         this.voteCount = (Integer) in.readValue(Integer.class.getClassLoader());
     }
 
-    public static final Parcelable.Creator<Result> CREATOR = new Parcelable.Creator<Result>() {
-        public Result createFromParcel(Parcel source) {
-            return new Result(source);
+    public static final Parcelable.Creator<MovieResult> CREATOR = new Parcelable.Creator<MovieResult>() {
+        public MovieResult createFromParcel(Parcel source) {
+            return new MovieResult(source);
         }
 
-        public Result[] newArray(int size) {
-            return new Result[size];
+        public MovieResult[] newArray(int size) {
+            return new MovieResult[size];
         }
     };
 }

@@ -11,5 +11,8 @@
     <string name="release_date_movie_detail">Release Date:</string>
     <string name="vote_average_movie_detail">Vote Average:</string>
     <string name="details_movie_detail">Details:</string>
+    <string name="details_movie_videos">Videos:</string>
+    <string name="details_movie_videos_unavailable">No videos found.</string>
+    <string name="movie_site_youtube">YouTube</string>
 
 </resources>

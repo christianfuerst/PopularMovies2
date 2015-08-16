@@ -9,21 +9,21 @@ import android.widget.ArrayAdapter;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.cf.popularmovies.model.Result;
+import com.cf.popularmovies.model.MovieResult;
 import com.squareup.picasso.Picasso;
 
 import java.util.List;
 
-public class ResultAdapter extends ArrayAdapter<Result> {
+public class MovieResultAdapter extends ArrayAdapter<MovieResult> {
 
     Context context;
-    int layoutRessource;
-    List<Result> data = null;
+    int layoutResource;
+    List<MovieResult> data = null;
 
-    public ResultAdapter(Context context, int resource, List<Result> objects) {
+    public MovieResultAdapter(Context context, int resource, List<MovieResult> objects) {
         super(context, resource, objects);
         this.context = context;
-        this.layoutRessource = resource;
+        this.layoutResource = resource;
         this.data = objects;
     }
 
@@ -31,11 +31,11 @@ public class ResultAdapter extends ArrayAdapter<Result> {
     public View getView(int position, View convertView, ViewGroup parent) {
 
         View view = convertView;
-        ResultHolder resultHolder = null;
+        ResultHolder resultHolder;
 
         if (view == null) {
             LayoutInflater layoutInflater = ((Activity)context).getLayoutInflater();
-            view = layoutInflater.inflate(layoutRessource, parent, false);
+            view = layoutInflater.inflate(layoutResource, parent, false);
 
             resultHolder = new ResultHolder();
             resultHolder.imageView_result = (ImageView)view.findViewById(R.id.ImageView_movie_poster);
@@ -48,7 +48,7 @@ public class ResultAdapter extends ArrayAdapter<Result> {
             resultHolder = (ResultHolder)view.getTag();
         }
 
-        Result result = data.get(position);
+        MovieResult result = data.get(position);
 
         if (result.getPosterPath() != null)
         {

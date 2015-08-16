@@ -13,9 +13,9 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.GridView;
 
-import com.cf.popularmovies.API.MoviesAPI;
-import com.cf.popularmovies.model.Page;
-import com.cf.popularmovies.model.Result;
+import com.cf.popularmovies.API.MovieAPI;
+import com.cf.popularmovies.model.MoviePage;
+import com.cf.popularmovies.model.MovieResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,8 +30,8 @@ public class MovieFragment extends Fragment {
     private GridView gridView;
     private Bundle savedInstanceState;
 
-    private List<Result> result_data = null;
-    private ResultAdapter resultAdapter;
+    private List<MovieResult> result_data = null;
+    private MovieResultAdapter movieResultAdapter;
     private Boolean isTaskRunning;
     private String sort_by;
 
@@ -42,7 +42,7 @@ public class MovieFragment extends Fragment {
     public void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
 
-        // Result data will be stored in ParcelableArrayList in order to prevent another API call
+        // MovieResult data will be stored in ParcelableArrayList in order to prevent another API call
         outState.putParcelableArrayList(KEY_RESULT_DATA, new ArrayList<>(result_data));
     }
 
@@ -69,6 +69,7 @@ public class MovieFragment extends Fragment {
             fetchMoviesTask.execute(sort_by);
         }
 
+        this.sort_by = sort_by;
     }
 
     @Override
@@ -84,16 +85,14 @@ public class MovieFragment extends Fragment {
                 .getString(getString(R.string.preferences_sort_by_key),
                         getString(R.string.preferences_sort_by_default_value));
 
-
-
-        // If a InstanceState is present, we don't have to do another API call in order to reduce network traffic
+        // If an InstanceState is present, we don't have to do another API call in order to reduce network traffic
         if (savedInstanceState != null) {
             // Retrieve result data from ParcelableArrayList
             result_data = savedInstanceState.getParcelableArrayList(KEY_RESULT_DATA);
 
             // Use the custom adapter to the result data visible in the GUI
-            resultAdapter = new ResultAdapter(getActivity(), R.layout.item_gridview_movie_poster, result_data);
-            gridView.setAdapter(resultAdapter);
+            movieResultAdapter = new MovieResultAdapter(getActivity(), R.layout.item_gridview_movie_poster, result_data);
+            gridView.setAdapter(movieResultAdapter);
         }
         else
         // If no InstanceState is present, start the custom AsyncTask in order to retrieve data from the API
@@ -106,7 +105,7 @@ public class MovieFragment extends Fragment {
         gridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                Result result = resultAdapter.getItem(position);
+                MovieResult result = movieResultAdapter.getItem(position);
 
                 Intent sendResultToMovieDetailActivity = new Intent(getActivity(), MovieDetailActivity.class)
                         .putExtra("result", result);
@@ -117,7 +116,8 @@ public class MovieFragment extends Fragment {
 
     }
 
-    private class FetchMoviesTask extends AsyncTask<String, Void, List<Result>> {
+    private class FetchMoviesTask extends AsyncTask<String, Void, List<MovieResult>> {
+
         private final String API_KEY = getString(R.string.api_key);
         private String api_endpoint = "http://api.themoviedb.org/3";
         private RetrofitError retrofitError = null;
@@ -132,9 +132,9 @@ public class MovieFragment extends Fragment {
 
         // Use RetroFit to retrieve data from API
         @Override
-        protected List<Result> doInBackground(String... params) {
+        protected List<MovieResult> doInBackground(String... params) {
 
-            Page page;
+            MoviePage page;
 
             try {
 
@@ -143,13 +143,13 @@ public class MovieFragment extends Fragment {
                         .setEndpoint(api_endpoint)
                         .build();
 
-                MoviesAPI moviesAPI = restAdapter.create(MoviesAPI.class);
-                page = moviesAPI.getPages(API_KEY, params[0]);
+                MovieAPI movieAPI = restAdapter.create(MovieAPI.class);
+                page = movieAPI.getPage(API_KEY, params[0]);
 
             } catch (RetrofitError e) {
 
                 retrofitError = e;
-                page = new Page();
+                page = new MoviePage();
 
             }
 
@@ -158,15 +158,15 @@ public class MovieFragment extends Fragment {
 
         // After we retrieved data from API it's time to handle the GUI
         @Override
-        protected void onPostExecute(List<Result> results) {
+        protected void onPostExecute(List<MovieResult> results) {
             super.onPostExecute(results);
 
             result_data = results;
             Snackbar snackbar = null;
 
             // Use the custom adapter to the result data visible in the GUI
-            resultAdapter = new ResultAdapter(getActivity(), R.layout.item_gridview_movie_poster, result_data);
-            gridView.setAdapter(resultAdapter);
+            movieResultAdapter = new MovieResultAdapter(getActivity(), R.layout.item_gridview_movie_poster, result_data);
+            gridView.setAdapter(movieResultAdapter);
 
             // If the API call didn't work out as expected Snackbar will appear
             if (retrofitError != null) {
@@ -180,7 +180,6 @@ public class MovieFragment extends Fragment {
                             FetchMoviesTask fetchMoviesTask = new FetchMoviesTask();
                             fetchMoviesTask.execute(sort_by);
                         }
-
                     }
                 });
 

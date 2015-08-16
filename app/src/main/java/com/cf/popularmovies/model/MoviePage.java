@@ -6,12 +6,12 @@ import com.google.gson.annotations.SerializedName;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Page {
+public class MoviePage {
 
     @Expose
     private Integer page;
     @Expose
-    private List<Result> results = new ArrayList<Result>();
+    private List<MovieResult> results = new ArrayList<>();
     @SerializedName("total_pages")
     @Expose
     private Integer totalPages;
@@ -42,7 +42,7 @@ public class Page {
      * @return
      * The results
      */
-    public List<Result> getResults() {
+    public List<MovieResult> getResults() {
         return results;
     }
 
@@ -51,7 +51,7 @@ public class Page {
      * @param results
      * The results
      */
-    public void setResults(List<Result> results) {
+    public void setResults(List<MovieResult> results) {
         this.results = results;
     }
 

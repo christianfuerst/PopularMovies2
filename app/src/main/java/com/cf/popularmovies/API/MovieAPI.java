@@ -1,17 +1,14 @@
 package com.cf.popularmovies.API;
 
-import com.cf.popularmovies.model.Page;
+import com.cf.popularmovies.model.MoviePage;
 
 import retrofit.http.GET;
 import retrofit.http.Query;
 
-/**
- * Created by fuerst on 09.07.15.
- */
-public interface MoviesAPI {
+public interface MovieAPI {
 
     @GET("/discover/movie")
-    Page getPages(
+    MoviePage getPage (
             @Query("api_key") String api_key,
             @Query("sort_by") String sort_by
     );
