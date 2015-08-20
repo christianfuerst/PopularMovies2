@@ -16,6 +16,13 @@
     <string name="details_movie_videos_unavailable">No videos found.</string>
     <string name="details_movie_reviews_unavailable">No reviews found.</string>
     <string name="details_movie_review_by">by</string>
+    <string name="details_movie_favorite_add">Add to favorites</string>
+    <string name="details_movie_favorite_remove">Remove from favorites</string>
+    <string name="details_movie_favorite_added">added to favorites.</string>
+    <string name="details_movie_favorite_removed">removed from favorites.</string>
+    <string name="details_movie_favorite_loading">Loading...</string>
     <string name="movie_site_youtube">YouTube</string>
+    <string name="internal_storage_backdrop_image_path">backdrop</string>
+    <string name="internal_storage_poster_image_path">poster</string>
 
 </resources>

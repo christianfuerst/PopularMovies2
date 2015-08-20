@@ -87,6 +87,12 @@
                     android:text="Vote Average"
                     android:textAppearance="?android:attr/textAppearanceMedium" />
 
+                <Button
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/details_movie_favorite_add"
+                    android:id="@+id/button_favorite" />
+
 
             </LinearLayout>
 
