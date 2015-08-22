@@ -12,6 +12,7 @@ import android.widget.TextView;
 import com.cf.popularmovies.model.MovieResult;
 import com.squareup.picasso.Picasso;
 
+import java.io.File;
 import java.util.List;
 
 public class MovieResultAdapter extends ArrayAdapter<MovieResult> {
@@ -50,15 +51,33 @@ public class MovieResultAdapter extends ArrayAdapter<MovieResult> {
 
         MovieResult result = data.get(position);
 
-        if (result.getPosterPath() != null)
-        {
-            Picasso.with(context)
-                    .load(getImageURL(result.getPosterPath()))
-                    .into(resultHolder.imageView_result);
+        // If PosterPath contains PackageName retrieve image from offline storage
+        if (result.getPosterPath().contains(context.getPackageName())) {
+
+            if (result.getPosterPath() != null)
+            {
+                Picasso.with(context)
+                        .load(new File(result.getPosterPath()))
+                                .into(resultHolder.imageView_result);
+            } else {
+                Picasso.with(context)
+                        .load(R.drawable.placeholder)
+                        .into(resultHolder.imageView_result);
+            }
+
         } else {
-            Picasso.with(context)
-                    .load(R.drawable.placeholder)
-                    .into(resultHolder.imageView_result);
+
+            if (result.getPosterPath() != null)
+            {
+                Picasso.with(context)
+                        .load(getImageURL(result.getPosterPath()))
+                        .into(resultHolder.imageView_result);
+            } else {
+                Picasso.with(context)
+                        .load(R.drawable.placeholder)
+                        .into(resultHolder.imageView_result);
+            }
+
         }
 
         resultHolder.textView_result.setText(result.getTitle());

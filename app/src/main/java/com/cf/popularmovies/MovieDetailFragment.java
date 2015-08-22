@@ -59,6 +59,8 @@ public class MovieDetailFragment extends Fragment {
 
     private static final String KEY_VIDEO_RESULT_DATA = "video_result_data";
     private static final String KEY_REVIEW_RESULT_DATA = "review_result_data";
+    private static final String KEY_IS_FAVORITE = "is_favorite";
+
     private LinearLayout linear_listView_video;
     private LinearLayout linear_listView_review;
 
@@ -68,19 +70,23 @@ public class MovieDetailFragment extends Fragment {
 
     private boolean isTaskRunning;
     private boolean isFavorite;
+    private boolean offlineMode;
 
     private TextView textView_movie_title;
     private TextView textView_release_date;
     private TextView textView_vote_average;
     private TextView textView_details;
+    private TextView textView_details_unavailable;
     private TextView textView_video_unavailable;
     private TextView textView_review_unavailable;
     private ImageView imageView_movie_header;
     private ImageView imageView_movie_poster_small;
     private Button button_favorite;
-    Cursor cursor;
+    private Cursor cursor;
+    private Context context;
 
     public MovieDetailFragment() {
+
     }
 
     @Override
@@ -90,6 +96,8 @@ public class MovieDetailFragment extends Fragment {
         // VideoResult & Review data will be stored in ParcelableArrayList in order to prevent another API call
         outState.putParcelableArrayList(KEY_VIDEO_RESULT_DATA, new ArrayList<>(video_result_data));
         outState.putParcelableArrayList(KEY_REVIEW_RESULT_DATA, new ArrayList<>(review_result_data));
+        outState.putBoolean(KEY_IS_FAVORITE, isFavorite);
+
     }
 
     @Override
@@ -100,6 +108,7 @@ public class MovieDetailFragment extends Fragment {
         textView_release_date = (TextView) getActivity().findViewById(R.id.textView_release_date);
         textView_vote_average = (TextView) getActivity().findViewById(R.id.textView_vote_average);
         textView_details = (TextView) getActivity().findViewById(R.id.textView_details);
+        textView_details_unavailable = (TextView) getActivity().findViewById(R.id.textView_details_unavailable);
         textView_video_unavailable = (TextView) getActivity().findViewById(R.id.textView_video_unavailable);
         textView_review_unavailable = (TextView) getActivity().findViewById(R.id.textView_review_unavailable);
         imageView_movie_header = (ImageView) getActivity().findViewById(R.id.imageView_movie_header);
@@ -108,15 +117,23 @@ public class MovieDetailFragment extends Fragment {
         linear_listView_review = (LinearLayout) getActivity().findViewById(R.id.linear_listView_review);
         button_favorite = (Button) getActivity().findViewById(R.id.button_favorite);
 
+        context = getActivity().getApplicationContext();
+
         // Handle image loading for "BackDrop" image
         // If no image is available use a placeholder instead
         if (result.getBackdropPath() != null)
         {
-            Picasso.with(getActivity().getApplicationContext())
-                    .load(getImageURL(result.getBackdropPath()))
-                    .into(imageView_movie_header);
+            if (offlineMode) {
+                Picasso.with(context)
+                        .load(new File(result.getBackdropPath()))
+                        .into(imageView_movie_header);
+            } else {
+                Picasso.with(context)
+                        .load(getImageURL(result.getBackdropPath()))
+                        .into(imageView_movie_header);
+            }
         } else {
-            Picasso.with(getActivity().getApplicationContext())
+            Picasso.with(context)
                     .load(R.drawable.placeholder)
                     .into(imageView_movie_header);
         }
@@ -125,11 +142,17 @@ public class MovieDetailFragment extends Fragment {
         // If no image is available use a placeholder instead
         if (result.getPosterPath() != null)
         {
-            Picasso.with(getActivity().getApplicationContext())
-                    .load(getImageURL(result.getPosterPath()))
-                    .into(imageView_movie_poster_small);
+            if (offlineMode) {
+                Picasso.with(context)
+                        .load(new File(result.getPosterPath()))
+                        .into(imageView_movie_poster_small);
+            } else {
+                Picasso.with(context)
+                        .load(getImageURL(result.getPosterPath()))
+                        .into(imageView_movie_poster_small);
+            }
         } else {
-            Picasso.with(getActivity().getApplicationContext())
+            Picasso.with(context)
                     .load(R.drawable.placeholder)
                     .into(imageView_movie_poster_small);
         }
@@ -139,7 +162,13 @@ public class MovieDetailFragment extends Fragment {
         textView_release_date.setText(result.getReleaseDate());
         String vote_average = result.getVoteAverage() + "/10.0";
         textView_vote_average.setText(vote_average);
-        textView_details.setText(result.getOverview());
+
+        if (result.getOverview() != null) {
+            textView_details.setText(result.getOverview());
+        } else {
+            textView_details_unavailable.setVisibility(View.VISIBLE);
+            textView_details.setVisibility(View.GONE);
+        }
 
         // Initialize favorite button until FetchMovieDataTask is done
         button_favorite.setClickable(false);
@@ -150,11 +179,20 @@ public class MovieDetailFragment extends Fragment {
             // Retrieve result data from ParcelableArrayList
             video_result_data = savedInstanceState.getParcelableArrayList(KEY_VIDEO_RESULT_DATA);
             review_result_data = savedInstanceState.getParcelableArrayList(KEY_REVIEW_RESULT_DATA);
+            isFavorite = savedInstanceState.getBoolean(KEY_IS_FAVORITE);
 
             // Use the custom adapter to the result data visible in the GUI
             ShowVideoResults(video_result_data);
             ShowReviewResults(review_result_data);
-        }
+
+            // Update favorite Button
+            if (isFavorite) {
+                button_favorite.setText(getText(R.string.details_movie_favorite_remove));
+                button_favorite.setClickable(true);
+            } else {
+                button_favorite.setText(getText(R.string.details_movie_favorite_add));
+                button_favorite.setClickable(true);
+            }        }
         else
         // If no InstanceState is present, start the custom AsyncTask in order to retrieve data from the API
         {
@@ -190,9 +228,18 @@ public class MovieDetailFragment extends Fragment {
         // Get data from parent activity, no API call required
         Intent intent = getActivity().getIntent();
 
-        if (intent != null && intent.hasExtra("result")) {
+        if (intent != null && intent.hasExtra("result") && intent.hasExtra("sort_by")) {
 
             result = intent.getParcelableExtra("result");
+
+            String sort_by = intent.getStringExtra("sort_by");
+
+            if (sort_by.equals(getString(R.string.preferences_sort_by_offline_value))) {
+                offlineMode = true;
+            } else {
+                offlineMode = false;
+            }
+
 
         }
 
@@ -241,8 +288,8 @@ public class MovieDetailFragment extends Fragment {
                 movieData.videoResults = video.getResults();
                 movieData.reviewResults = reviewPage.getResults();
 
-                // If selected movie is a favorite, local storage is updated
-                if (isFavorite) {
+                // If selected movie is a favorite and not in offline mode, local storage is updated
+                if (isFavorite && !offlineMode) {
                     RemoveFavorite(result.getId());
                     AddFavorite(movieData);
                 }
@@ -395,6 +442,11 @@ public class MovieDetailFragment extends Fragment {
 
             button_favorite.setText(getString(R.string.details_movie_favorite_add));
             button_favorite.setClickable(true);
+
+            // If offline mode, adding a favorite is not supported, let it disappear
+            if (offlineMode) {
+                button_favorite.setVisibility(Button.GONE);
+            }
         }
     }
 
@@ -409,6 +461,7 @@ public class MovieDetailFragment extends Fragment {
 
             return IMAGE_BASE_URL + IMAGE_SIZE + posterPath;
         }
+
     }
 
     // Helper function to filter videos from api to YouTube only
@@ -508,6 +561,9 @@ public class MovieDetailFragment extends Fragment {
         movieCursor.moveToNext();
         Long movie_id = movieCursor.getId();
 
+        cursor.close();
+        movieCursor.close();
+
         // Query the db for video and review records for this particular movie
         // and put data into video_result_data and review_result_data
         VideoSelection videoSelection = new VideoSelection();
@@ -529,6 +585,9 @@ public class MovieDetailFragment extends Fragment {
             movieData.videoResults.add(videoCursor.getPosition(), videoResult);
         }
 
+        cursor.close();
+        videoCursor.close();
+
         ReviewSelection reviewSelection = new ReviewSelection();
         reviewSelection.movieId(movie_id);
         cursor = getActivity().getApplicationContext().getContentResolver()
@@ -546,6 +605,9 @@ public class MovieDetailFragment extends Fragment {
             reviewResult.setContent(reviewCursor.getContent());
             movieData.reviewResults.add(reviewCursor.getPosition(), reviewResult);
         }
+
+        cursor.close();
+        reviewCursor.close();
 
         return movieData;
     }
@@ -567,10 +629,22 @@ public class MovieDetailFragment extends Fragment {
         MovieCursor movieCursor = new MovieCursor(cursor);
 
         if (movieCursor.getCount() == 1) {
+
+            cursor.close();
+            movieCursor.close();
+
             return true;
+
         }  else {
+
+            cursor.close();
+            movieCursor.close();
+
             return false;
+
         }
+
+
 
     }
 
@@ -629,6 +703,9 @@ public class MovieDetailFragment extends Fragment {
         movieCursor.moveToNext();
         Long movie_id = movieCursor.getId();
 
+        cursor.close();
+        movieCursor.close();
+
         for (int i = 0; i < video_result_data.size(); i++) {
             VideoContentValues videoContentValues = new VideoContentValues();
             videoContentValues.putMovieId(movie_id);
@@ -677,6 +754,9 @@ public class MovieDetailFragment extends Fragment {
             File posterFile = new File(posterPath);
             posterFile.delete();
         }
+
+        cursor.close();
+        movieCursor.close();
 
         movieSelection.delete(getActivity().getApplicationContext().getContentResolver());
 

@@ -123,8 +123,16 @@
                     android:id="@+id/textView_details"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Details"
-                    android:textAppearance="?android:attr/textAppearanceSmall" />
+                    android:textAppearance="?android:attr/textAppearanceSmall"
+                    android:text="Details" />
+
+                <TextView
+                    android:id="@+id/textView_details_unavailable"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/details_movie_details_unavailable"
+                    android:textAppearance="?android:attr/textAppearanceSmall"
+                    android:visibility="gone" />
 
             </LinearLayout>
 

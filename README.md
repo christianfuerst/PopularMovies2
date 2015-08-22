@@ -1,5 +1,5 @@
 # PopularMovies
-Android Nanodegree Project 1
+Android Nanodegree Project 2
 
 The application requires an API key from themoviedb.org.
 

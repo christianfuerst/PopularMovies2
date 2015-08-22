@@ -2,6 +2,7 @@ package com.cf.popularmovies;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
@@ -12,10 +13,13 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.GridView;
+import android.widget.TextView;
 
 import com.cf.popularmovies.API.MovieAPI;
 import com.cf.popularmovies.model.MoviePage;
 import com.cf.popularmovies.model.MovieResult;
+import com.cf.popularmovies.provider.movie.MovieColumns;
+import com.cf.popularmovies.provider.movie.MovieCursor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,12 +32,13 @@ public class MovieFragment extends Fragment {
     private static final String KEY_RESULT_DATA = "result_data";
 
     private GridView gridView;
-    private Bundle savedInstanceState;
 
     private List<MovieResult> result_data = null;
+    private TextView textView_no_movies_found;
     private MovieResultAdapter movieResultAdapter;
     private Boolean isTaskRunning;
     private String sort_by;
+    private Cursor cursor;
 
     public MovieFragment() {
     }
@@ -77,6 +82,7 @@ public class MovieFragment extends Fragment {
         super.onActivityCreated(savedInstanceState);
 
         gridView = (GridView) getActivity().findViewById(R.id.gridView_movie_poster);
+        textView_no_movies_found = (TextView) getActivity().findViewById(R.id.textView_no_movies_found);
 
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
 
@@ -108,7 +114,8 @@ public class MovieFragment extends Fragment {
                 MovieResult result = movieResultAdapter.getItem(position);
 
                 Intent sendResultToMovieDetailActivity = new Intent(getActivity(), MovieDetailActivity.class)
-                        .putExtra("result", result);
+                        .putExtra("result", result)
+                        .putExtra("sort_by", sort_by);
 
                 startActivity(sendResultToMovieDetailActivity);
             }
@@ -128,32 +135,74 @@ public class MovieFragment extends Fragment {
             super.onPreExecute();
 
             isTaskRunning = true;
+
+            textView_no_movies_found.setVisibility(TextView.GONE);
+
         }
 
         // Use RetroFit to retrieve data from API
         @Override
         protected List<MovieResult> doInBackground(String... params) {
 
-            MoviePage page;
+            List<MovieResult> movieResults = new ArrayList<>();
 
-            try {
+            if (params[0].equals(getString(R.string.preferences_sort_by_offline_value))) {
 
-                RestAdapter restAdapter = new RestAdapter.Builder()
-                        .setLogLevel(RestAdapter.LogLevel.FULL)
-                        .setEndpoint(api_endpoint)
-                        .build();
+                cursor = getActivity().getApplicationContext().getContentResolver()
+                        .query(MovieColumns.CONTENT_URI,
+                                null,
+                                null,
+                                null,
+                                null
+                        );
 
-                MovieAPI movieAPI = restAdapter.create(MovieAPI.class);
-                page = movieAPI.getPage(API_KEY, params[0]);
+                MovieCursor movieCursor = new MovieCursor(cursor);
 
-            } catch (RetrofitError e) {
+                for (movieCursor.moveToFirst(); !movieCursor.isAfterLast(); movieCursor.moveToNext()) {
+                    MovieResult movieResult = new MovieResult();
 
-                retrofitError = e;
-                page = new MoviePage();
+                    movieResult.setId(movieCursor.getTmdbId());
+                    movieResult.setTitle(movieCursor.getTitle());
+                    movieResult.setOverview(movieCursor.getOverview());
+                    movieResult.setReleaseDate(movieCursor.getReleaseDate());
+                    movieResult.setVoteAverage(movieCursor.getVoteAverage());
+                    movieResult.setBackdropPath(movieCursor.getBackdroppath());
+                    movieResult.setPosterPath(movieCursor.getPosterpath());
+
+                    movieResults.add(movieCursor.getPosition(), movieResult);
+                }
+
+                cursor.close();
+                movieCursor.close();
+
+                return movieResults;
+
+            } else {
+
+                MoviePage page;
+
+                try {
+
+                    RestAdapter restAdapter = new RestAdapter.Builder()
+                            .setLogLevel(RestAdapter.LogLevel.FULL)
+                            .setEndpoint(api_endpoint)
+                            .build();
+
+                    MovieAPI movieAPI = restAdapter.create(MovieAPI.class);
+                    page = movieAPI.getPage(API_KEY, params[0]);
+
+                } catch (RetrofitError e) {
+
+                    retrofitError = e;
+                    page = new MoviePage();
+
+                }
+
+                movieResults = page.getResults();
 
             }
 
-            return page.getResults();
+            return movieResults;
         }
 
         // After we retrieved data from API it's time to handle the GUI
@@ -192,6 +241,10 @@ public class MovieFragment extends Fragment {
                     // If the API call worked, hide Snackbar if present
                     snackbar.dismiss();
                 }
+            }
+
+            if (results.size() == 0) {
+                textView_no_movies_found.setVisibility(TextView.VISIBLE);
             }
 
             // AsyncTask is done, so we set isTaskRunning back to false
