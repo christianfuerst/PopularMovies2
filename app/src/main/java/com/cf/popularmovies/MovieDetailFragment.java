@@ -12,8 +12,13 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.Fragment;
+import android.support.v4.view.MenuItemCompat;
+import android.support.v7.widget.ShareActionProvider;
 import android.text.Html;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -67,6 +72,7 @@ public class MovieDetailFragment extends Fragment {
     private MovieResult result;
     private List<VideoResult> video_result_data = null;
     private List<ReviewResult> review_result_data = null;
+    private ShareActionProvider shareActionProvider;
 
     private boolean isTaskRunning;
     private boolean isFavorite;
@@ -86,7 +92,7 @@ public class MovieDetailFragment extends Fragment {
     private Context context;
 
     public MovieDetailFragment() {
-
+        setHasOptionsMenu(true);
     }
 
     @Override
@@ -97,6 +103,18 @@ public class MovieDetailFragment extends Fragment {
         outState.putParcelableArrayList(KEY_VIDEO_RESULT_DATA, new ArrayList<>(video_result_data));
         outState.putParcelableArrayList(KEY_REVIEW_RESULT_DATA, new ArrayList<>(review_result_data));
         outState.putBoolean(KEY_IS_FAVORITE, isFavorite);
+
+    }
+
+    @Override
+    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        super.onCreateOptionsMenu(menu, inflater);
+
+        inflater.inflate(R.menu.menu_movie_detail_fragment, menu);
+
+        MenuItem menuItem = menu.findItem(R.id.action_share);
+
+        shareActionProvider = (ShareActionProvider) MenuItemCompat.getActionProvider(menuItem);
 
     }
 
@@ -321,6 +339,11 @@ public class MovieDetailFragment extends Fragment {
             video_result_data = FilterYouTubeVideos(movieData.videoResults);
             review_result_data = movieData.reviewResults;
             Snackbar snackbar = null;
+
+            // Update share Intent
+            if (shareActionProvider != null) {
+                shareActionProvider.setShareIntent(createShareMovieIntent(movieData));
+            }
 
             // Update favorite Button
             if (isFavorite) {
@@ -812,6 +835,23 @@ public class MovieDetailFragment extends Fragment {
             }
         }
         return bitmap;
+    }
+
+    // Helper method to create an intent to share movie url
+    private Intent createShareMovieIntent(MovieData movieData) {
+        String share_video_url;
+
+        if (movieData.videoResults.isEmpty()) {
+            share_video_url = getString(R.string.movie_site_youtube_movie_placeholder);
+        } else {
+            share_video_url = getString(R.string.movie_site_youtube_base_url) + movieData.videoResults.get(0).getKey();
+        }
+
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, share_video_url);
+
+        return shareIntent;
     }
 
     public class MovieData {
