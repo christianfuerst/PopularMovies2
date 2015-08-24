@@ -7,6 +7,8 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -48,8 +50,6 @@ import com.cf.popularmovies.provider.video.VideoSelection;
 import com.squareup.picasso.Picasso;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -62,19 +62,23 @@ import retrofit.RetrofitError;
 
 public class MovieDetailFragment extends Fragment {
 
-    private static final String KEY_VIDEO_RESULT_DATA = "video_result_data";
-    private static final String KEY_REVIEW_RESULT_DATA = "review_result_data";
-    private static final String KEY_IS_FAVORITE = "is_favorite";
+    public static final String KEY_MOVIE_RESULT_DATA = "result";
+    public static final String KEY_SORT_BY = "sort_by";
+    public static final String KEY_VIDEO_RESULT_DATA = "video_result_data";
+    public static final String KEY_REVIEW_RESULT_DATA = "review_result_data";
+    public static final String KEY_IS_FAVORITE = "is_favorite";
+    public static final String KEY_API_ERROR = "api_error";
 
     private LinearLayout linear_listView_video;
     private LinearLayout linear_listView_review;
 
     private MovieResult result;
+    private String api_error;
     private List<VideoResult> video_result_data = null;
     private List<ReviewResult> review_result_data = null;
     private ShareActionProvider shareActionProvider;
 
-    private boolean isTaskRunning;
+    public static boolean isTaskRunning;
     private boolean isFavorite;
     private boolean offlineMode;
 
@@ -87,9 +91,16 @@ public class MovieDetailFragment extends Fragment {
     private TextView textView_review_unavailable;
     private ImageView imageView_movie_header;
     private ImageView imageView_movie_poster_small;
+    private LinearLayout linearLayout_content;
     private Button button_favorite;
+    private MenuItem menuItem;
+    private Snackbar snackbar;
     private Cursor cursor;
     private Context context;
+
+    public interface Callback {
+        public void OnFavoriteRemove();
+    }
 
     public MovieDetailFragment() {
         setHasOptionsMenu(true);
@@ -99,11 +110,13 @@ public class MovieDetailFragment extends Fragment {
     public void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
 
-        // VideoResult & Review data will be stored in ParcelableArrayList in order to prevent another API call
-        outState.putParcelableArrayList(KEY_VIDEO_RESULT_DATA, new ArrayList<>(video_result_data));
-        outState.putParcelableArrayList(KEY_REVIEW_RESULT_DATA, new ArrayList<>(review_result_data));
-        outState.putBoolean(KEY_IS_FAVORITE, isFavorite);
-
+        if (result != null) {
+            // VideoResult & Review data will be stored in ParcelableArrayList in order to prevent another API call
+            outState.putParcelableArrayList(KEY_VIDEO_RESULT_DATA, new ArrayList<>(video_result_data));
+            outState.putParcelableArrayList(KEY_REVIEW_RESULT_DATA, new ArrayList<>(review_result_data));
+            outState.putBoolean(KEY_IS_FAVORITE, isFavorite);
+            outState.putString(KEY_API_ERROR, api_error);
+        }
     }
 
     @Override
@@ -112,130 +125,12 @@ public class MovieDetailFragment extends Fragment {
 
         inflater.inflate(R.menu.menu_movie_detail_fragment, menu);
 
-        MenuItem menuItem = menu.findItem(R.id.action_share);
+        menuItem = menu.findItem(R.id.action_share);
 
         shareActionProvider = (ShareActionProvider) MenuItemCompat.getActionProvider(menuItem);
 
-    }
-
-    @Override
-    public void onActivityCreated(Bundle savedInstanceState) {
-        super.onActivityCreated(savedInstanceState);
-
-        textView_movie_title = (TextView) getActivity().findViewById(R.id.textView_movie_title);
-        textView_release_date = (TextView) getActivity().findViewById(R.id.textView_release_date);
-        textView_vote_average = (TextView) getActivity().findViewById(R.id.textView_vote_average);
-        textView_details = (TextView) getActivity().findViewById(R.id.textView_details);
-        textView_details_unavailable = (TextView) getActivity().findViewById(R.id.textView_details_unavailable);
-        textView_video_unavailable = (TextView) getActivity().findViewById(R.id.textView_video_unavailable);
-        textView_review_unavailable = (TextView) getActivity().findViewById(R.id.textView_review_unavailable);
-        imageView_movie_header = (ImageView) getActivity().findViewById(R.id.imageView_movie_header);
-        imageView_movie_poster_small = (ImageView) getActivity().findViewById(R.id.imageView_movie_poster_small);
-        linear_listView_video = (LinearLayout) getActivity().findViewById(R.id.linear_listView_video);
-        linear_listView_review = (LinearLayout) getActivity().findViewById(R.id.linear_listView_review);
-        button_favorite = (Button) getActivity().findViewById(R.id.button_favorite);
-
-        context = getActivity().getApplicationContext();
-
-        // Handle image loading for "BackDrop" image
-        // If no image is available use a placeholder instead
-        if (result.getBackdropPath() != null)
-        {
-            if (offlineMode) {
-                Picasso.with(context)
-                        .load(new File(result.getBackdropPath()))
-                        .into(imageView_movie_header);
-            } else {
-                Picasso.with(context)
-                        .load(getImageURL(result.getBackdropPath()))
-                        .into(imageView_movie_header);
-            }
-        } else {
-            Picasso.with(context)
-                    .load(R.drawable.placeholder)
-                    .into(imageView_movie_header);
-        }
-
-        // Handle image loading for "Poster" image
-        // If no image is available use a placeholder instead
-        if (result.getPosterPath() != null)
-        {
-            if (offlineMode) {
-                Picasso.with(context)
-                        .load(new File(result.getPosterPath()))
-                        .into(imageView_movie_poster_small);
-            } else {
-                Picasso.with(context)
-                        .load(getImageURL(result.getPosterPath()))
-                        .into(imageView_movie_poster_small);
-            }
-        } else {
-            Picasso.with(context)
-                    .load(R.drawable.placeholder)
-                    .into(imageView_movie_poster_small);
-        }
-
-        // Update the GUI with data
-        textView_movie_title.setText(result.getTitle());
-        textView_release_date.setText(result.getReleaseDate());
-        String vote_average = result.getVoteAverage() + "/10.0";
-        textView_vote_average.setText(vote_average);
-
-        if (result.getOverview() != null) {
-            textView_details.setText(result.getOverview());
-        } else {
-            textView_details_unavailable.setVisibility(View.VISIBLE);
-            textView_details.setVisibility(View.GONE);
-        }
-
-        // Initialize favorite button until FetchMovieDataTask is done
-        button_favorite.setClickable(false);
-        button_favorite.setText(getText(R.string.details_movie_favorite_loading));
-
-        // If an InstanceState is present, we don't have to do another API call in order to reduce network traffic
-        if (savedInstanceState != null) {
-            // Retrieve result data from ParcelableArrayList
-            video_result_data = savedInstanceState.getParcelableArrayList(KEY_VIDEO_RESULT_DATA);
-            review_result_data = savedInstanceState.getParcelableArrayList(KEY_REVIEW_RESULT_DATA);
-            isFavorite = savedInstanceState.getBoolean(KEY_IS_FAVORITE);
-
-            // Use the custom adapter to the result data visible in the GUI
-            ShowVideoResults(video_result_data);
-            ShowReviewResults(review_result_data);
-
-            // Update favorite Button
-            if (isFavorite) {
-                button_favorite.setText(getText(R.string.details_movie_favorite_remove));
-                button_favorite.setClickable(true);
-            } else {
-                button_favorite.setText(getText(R.string.details_movie_favorite_add));
-                button_favorite.setClickable(true);
-            }        }
-        else
-        // If no InstanceState is present, start the custom AsyncTask in order to retrieve data from the API
-        {
-            FetchMovieDataTask fetchMovieDataTask = new FetchMovieDataTask();
-            fetchMovieDataTask.execute(result.getId().toString());
-        }
-
-        // OnClickListener for favorite button in order to add / remove movie to favorites
-        button_favorite.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-
-                if (button_favorite.getText()
-                        .equals(getString(R.string.details_movie_favorite_add))) {
-                    AddFavoriteTask addFavoriteTask = new AddFavoriteTask();
-                    addFavoriteTask.execute();
-                    isFavorite = true;
-                }
-                else
-                {
-                    RemoveFavoriteTask removeFavoriteTask = new RemoveFavoriteTask();
-                    removeFavoriteTask.execute();
-                    isFavorite = false;
-                }
-            }
-        });
+        // Hide share actionbar item for now
+        menuItem.setVisible(false);
 
     }
 
@@ -243,14 +138,14 @@ public class MovieDetailFragment extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
 
-        // Get data from parent activity, no API call required
-        Intent intent = getActivity().getIntent();
+        context = getActivity().getApplicationContext();
 
-        if (intent != null && intent.hasExtra("result") && intent.hasExtra("sort_by")) {
+        // Get data passed in, no API call required
+        Bundle bundle = getArguments();
 
-            result = intent.getParcelableExtra("result");
-
-            String sort_by = intent.getStringExtra("sort_by");
+        if (bundle != null) {
+            result = getArguments().getParcelable(KEY_MOVIE_RESULT_DATA);
+            String sort_by = getArguments().getString(KEY_SORT_BY);
 
             if (sort_by.equals(getString(R.string.preferences_sort_by_offline_value))) {
                 offlineMode = true;
@@ -258,10 +153,175 @@ public class MovieDetailFragment extends Fragment {
                 offlineMode = false;
             }
 
+            return inflater.inflate(R.layout.fragment_movie_detail, container, false);
 
         }
+        else
+        {
+            return null;
+        }
 
-        return inflater.inflate(R.layout.fragment_movie_detail, container, false);
+    }
+
+    @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+
+        if (result != null) {
+            textView_movie_title = (TextView) getActivity().findViewById(R.id.textView_movie_title);
+            textView_release_date = (TextView) getActivity().findViewById(R.id.textView_release_date);
+            textView_vote_average = (TextView) getActivity().findViewById(R.id.textView_vote_average);
+            textView_details = (TextView) getActivity().findViewById(R.id.textView_details);
+            textView_details_unavailable = (TextView) getActivity().findViewById(R.id.textView_details_unavailable);
+            textView_video_unavailable = (TextView) getActivity().findViewById(R.id.textView_video_unavailable);
+            textView_review_unavailable = (TextView) getActivity().findViewById(R.id.textView_review_unavailable);
+            imageView_movie_header = (ImageView) getActivity().findViewById(R.id.imageView_movie_header);
+            imageView_movie_poster_small = (ImageView) getActivity().findViewById(R.id.imageView_movie_poster_small);
+            linear_listView_video = (LinearLayout) getActivity().findViewById(R.id.linear_listView_video);
+            linear_listView_review = (LinearLayout) getActivity().findViewById(R.id.linear_listView_review);
+            linearLayout_content = (LinearLayout) getActivity().findViewById(R.id.linearLayout_content);
+            button_favorite = (Button) getActivity().findViewById(R.id.button_favorite);
+
+            // Make linearLayout_content invisible for now
+            linearLayout_content.setVisibility(View.GONE);
+
+            // Handle image loading for "BackDrop" image
+            // If no image is available use a placeholder instead
+            if (result.getBackdropPath() != null)
+            {
+                if (offlineMode) {
+                    Picasso.with(context)
+                            .load(new File(result.getBackdropPath()))
+                            .into(imageView_movie_header);
+                } else {
+                    Picasso.with(context)
+                            .load(getImageURL(result.getBackdropPath()))
+                            .into(imageView_movie_header);
+                }
+            } else {
+                Picasso.with(context)
+                        .load(R.drawable.placeholder)
+                        .into(imageView_movie_header);
+            }
+
+            // Handle image loading for "Poster" image
+            // If no image is available use a placeholder instead
+            if (result.getPosterPath() != null)
+            {
+                if (offlineMode) {
+                    Picasso.with(context)
+                            .load(new File(result.getPosterPath()))
+                            .into(imageView_movie_poster_small);
+                } else {
+                    Picasso.with(context)
+                            .load(getImageURL(result.getPosterPath()))
+                            .into(imageView_movie_poster_small);
+                }
+            } else {
+                Picasso.with(context)
+                        .load(R.drawable.placeholder)
+                        .into(imageView_movie_poster_small);
+            }
+
+            // Update the GUI with data
+            textView_movie_title.setText(result.getTitle());
+            textView_release_date.setText(result.getReleaseDate());
+            String vote_average = result.getVoteAverage() + "/10.0";
+            textView_vote_average.setText(vote_average);
+
+            if (result.getOverview() != null) {
+                textView_details.setText(result.getOverview());
+            } else {
+                textView_details_unavailable.setVisibility(View.VISIBLE);
+                textView_details.setVisibility(View.GONE);
+            }
+
+            // Initialize favorite button until FetchMovieDataTask is done
+            button_favorite.setClickable(false);
+            button_favorite.setText(getText(R.string.details_movie_favorite_loading));
+
+            // If an InstanceState is present, we don't have to do another API call in order to reduce network traffic
+            if (savedInstanceState != null) {
+
+                // Retrieve result data from ParcelableArrayList
+                video_result_data = savedInstanceState.getParcelableArrayList(KEY_VIDEO_RESULT_DATA);
+                review_result_data = savedInstanceState.getParcelableArrayList(KEY_REVIEW_RESULT_DATA);
+                isFavorite = savedInstanceState.getBoolean(KEY_IS_FAVORITE);
+                api_error = savedInstanceState.getString(KEY_API_ERROR);
+
+                if (api_error != null) {
+
+                    snackbar = Snackbar.make(getView(), api_error, Snackbar.LENGTH_INDEFINITE);
+
+                    snackbar.setAction(getString(R.string.button_reload), new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            if (!isTaskRunning) {
+                                textView_video_unavailable.setVisibility(View.GONE);
+                                textView_review_unavailable.setVisibility(View.GONE);
+
+                                FetchMovieDataTask fetchMovieDataTask = new FetchMovieDataTask();
+                                fetchMovieDataTask.execute(result.getId().toString());
+                            }
+                        }
+                    });
+
+                    snackbar.show();
+
+                } else {
+                    // Use the custom adapter to the result data visible in the GUI
+                    ShowVideoResults(video_result_data);
+                    ShowReviewResults(review_result_data);
+
+                    // Update favorite Button
+                    if (isFavorite) {
+                        button_favorite.setText(getText(R.string.details_movie_favorite_remove));
+                        button_favorite.setClickable(true);
+                    } else {
+                        button_favorite.setText(getText(R.string.details_movie_favorite_add));
+                        button_favorite.setClickable(true);
+                    }
+
+                    // Make linearLayout_content visible again
+                    linearLayout_content.setVisibility(View.VISIBLE);
+                }
+            }
+            else
+            // If no InstanceState is present, start the custom AsyncTask in order to retrieve data from the API
+            {
+                FetchMovieDataTask fetchMovieDataTask = new FetchMovieDataTask();
+                fetchMovieDataTask.execute(result.getId().toString());
+            }
+
+            // OnClickListener for favorite button in order to add / remove movie to favorites
+            button_favorite.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+
+                    if (button_favorite.getText()
+                            .equals(getString(R.string.details_movie_favorite_add))) {
+                        AddFavoriteTask addFavoriteTask = new AddFavoriteTask();
+                        addFavoriteTask.execute();
+                        isFavorite = true;
+                    }
+                    else
+                    {
+                        RemoveFavoriteTask removeFavoriteTask = new RemoveFavoriteTask();
+                        removeFavoriteTask.execute();
+                        isFavorite = false;
+                    }
+                }
+            });
+        }
+
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+
+        if (snackbar != null) {
+            snackbar.dismiss();
+        }
     }
 
     // Background task to fetch movie data and update the gui
@@ -269,7 +329,7 @@ public class MovieDetailFragment extends Fragment {
 
         private final String API_KEY = getString(R.string.api_key);
         private String api_endpoint = "http://api.themoviedb.org/3";
-        private RetrofitError retrofitError = null;
+        private RetrofitError retrofitError;
 
         // In order to avoid multiple AsyncTask we set isTaskRunning true first
         @Override
@@ -277,6 +337,7 @@ public class MovieDetailFragment extends Fragment {
             super.onPreExecute();
 
             isTaskRunning = true;
+            api_error = null;
         }
 
         // Use RetroFit to retrieve data from API
@@ -303,13 +364,18 @@ public class MovieDetailFragment extends Fragment {
                 reviewPage = reviewAPI.getPage(API_KEY, params[0]);
 
                 movieData.movieResult = result;
-                movieData.videoResults = video.getResults();
+                movieData.videoResults = FilterYouTubeVideos(video.getResults());
                 movieData.reviewResults = reviewPage.getResults();
 
                 // If selected movie is a favorite and not in offline mode, local storage is updated
                 if (isFavorite && !offlineMode) {
                     RemoveFavorite(result.getId());
                     AddFavorite(movieData);
+                }
+
+                // Update share Intent
+                if (shareActionProvider != null) {
+                    shareActionProvider.setShareIntent(createShareMovieIntent(movieData));
                 }
 
             } catch (RetrofitError e) {
@@ -321,6 +387,7 @@ public class MovieDetailFragment extends Fragment {
                     retrofitError = e;
                     video = new Video();
                     reviewPage = new ReviewPage();
+                    api_error = retrofitError.getMessage();
 
                     movieData.movieResult = result;
                     movieData.videoResults = video.getResults();
@@ -336,13 +403,12 @@ public class MovieDetailFragment extends Fragment {
         protected void onPostExecute(MovieData movieData) {
             super.onPostExecute(movieData);
 
-            video_result_data = FilterYouTubeVideos(movieData.videoResults);
+            video_result_data = movieData.videoResults;
             review_result_data = movieData.reviewResults;
-            Snackbar snackbar = null;
 
-            // Update share Intent
+            // Make share button visible
             if (shareActionProvider != null) {
-                shareActionProvider.setShareIntent(createShareMovieIntent(movieData));
+                menuItem.setVisible(true);
             }
 
             // Update favorite Button
@@ -358,11 +424,11 @@ public class MovieDetailFragment extends Fragment {
             ShowVideoResults(video_result_data);
             ShowReviewResults(review_result_data);
 
-            if (video_result_data.isEmpty()) {
+            if (video_result_data.size() == 0) {
                 textView_video_unavailable.setVisibility(View.VISIBLE);
             }
 
-            if (review_result_data.isEmpty()) {
+            if (review_result_data.size() == 0) {
                 textView_review_unavailable.setVisibility(View.VISIBLE);
             }
 
@@ -388,11 +454,12 @@ public class MovieDetailFragment extends Fragment {
             }
             else
             {
-                if (snackbar != null)
-                {
-                    // If the API call worked, hide Snackbar if present
+                if (snackbar != null) {
                     snackbar.dismiss();
                 }
+
+                // Make linearLayout_content visible again
+                linearLayout_content.setVisibility(View.VISIBLE);
             }
 
             // AsyncTask is done, so we set isTaskRunning back to false
@@ -402,6 +469,9 @@ public class MovieDetailFragment extends Fragment {
 
     // Background task to store movie data and images into local file system
     public class AddFavoriteTask extends AsyncTask<Void, Void, Void> {
+
+        private boolean isConnected;
+
         @Override
         protected Void doInBackground(Void... params) {
 
@@ -411,7 +481,17 @@ public class MovieDetailFragment extends Fragment {
             movieData.videoResults = video_result_data;
             movieData.reviewResults = review_result_data;
 
-            AddFavorite(movieData);
+            // Check if network connectivity is available
+            ConnectivityManager cm =
+                    (ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
+
+            NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+            isConnected = activeNetwork != null &&
+                    activeNetwork.isConnectedOrConnecting();
+
+            if (isConnected) {
+                AddFavorite(movieData);
+            }
 
             return null;
         }
@@ -432,7 +512,16 @@ public class MovieDetailFragment extends Fragment {
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
 
-            button_favorite.setText(getString(R.string.details_movie_favorite_remove));
+            if (isConnected) {
+                button_favorite.setText(getString(R.string.details_movie_favorite_remove));
+            } else {
+                button_favorite.setText(getString(R.string.details_movie_favorite_add));
+
+                Snackbar.make(getView(),
+                        getString(R.string.details_movie_favorite_add_error),
+                        Snackbar.LENGTH_LONG).show();
+            }
+
             button_favorite.setClickable(true);
         }
     }
@@ -469,6 +558,11 @@ public class MovieDetailFragment extends Fragment {
             // If offline mode, adding a favorite is not supported, let it disappear
             if (offlineMode) {
                 button_favorite.setVisibility(Button.GONE);
+
+                // If twopanes = true send a callback to MovieActivity
+                if (MovieActivity.twopanes) {
+                    ((Callback) getActivity()).OnFavoriteRemove();
+                }
             }
         }
     }
@@ -667,8 +761,6 @@ public class MovieDetailFragment extends Fragment {
 
         }
 
-
-
     }
 
     // Helper function to add movie data into offline storage
@@ -805,17 +897,6 @@ public class MovieDetailFragment extends Fragment {
         }
 
         return path.getAbsolutePath();
-    }
-
-    // Helper function to retrieve bitmaps from local storage
-    public Bitmap LoadBitmapFromInternalStorage(String path) {
-        try  {
-            File file = new File(path);
-            Bitmap bitmap = BitmapFactory.decodeStream(new FileInputStream(file));
-            return bitmap;
-        } catch (FileNotFoundException e) {
-            return null;
-        }
     }
 
     // Helper function to retrieve an image from url and convert it to Bitmap

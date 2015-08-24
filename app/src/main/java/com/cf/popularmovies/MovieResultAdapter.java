@@ -52,32 +52,20 @@ public class MovieResultAdapter extends ArrayAdapter<MovieResult> {
         MovieResult result = data.get(position);
 
         // If PosterPath contains PackageName retrieve image from offline storage
-        if (result.getPosterPath().contains(context.getPackageName())) {
-
-            if (result.getPosterPath() != null)
-            {
+        if (result.getPosterPath() != null) {
+            if (result.getPosterPath().contains(context.getPackageName())) {
                 Picasso.with(context)
                         .load(new File(result.getPosterPath()))
-                                .into(resultHolder.imageView_result);
-            } else {
-                Picasso.with(context)
-                        .load(R.drawable.placeholder)
                         .into(resultHolder.imageView_result);
-            }
-
-        } else {
-
-            if (result.getPosterPath() != null)
-            {
+            } else {
                 Picasso.with(context)
                         .load(getImageURL(result.getPosterPath()))
                         .into(resultHolder.imageView_result);
-            } else {
-                Picasso.with(context)
-                        .load(R.drawable.placeholder)
-                        .into(resultHolder.imageView_result);
             }
-
+        } else {
+            Picasso.with(context)
+                    .load(R.drawable.placeholder)
+                    .into(resultHolder.imageView_result);
         }
 
         resultHolder.textView_result.setText(result.getTitle());

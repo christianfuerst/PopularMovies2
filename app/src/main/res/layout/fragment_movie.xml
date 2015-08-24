@@ -19,6 +19,7 @@
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
         android:id="@+id/gridView_movie_poster"
-        android:numColumns="auto_fit" />
+        android:numColumns="auto_fit"
+        android:choiceMode="singleChoice" />
 
 </LinearLayout>
