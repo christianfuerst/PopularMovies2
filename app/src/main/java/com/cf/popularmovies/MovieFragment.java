@@ -1,6 +1,5 @@
 package com.cf.popularmovies;
 
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.os.AsyncTask;
@@ -30,15 +29,26 @@ import retrofit.RetrofitError;
 public class MovieFragment extends Fragment {
 
     private static final String KEY_RESULT_DATA = "result_data";
+    private static final String KEY_SELECTED_ITEM_POSITION = "selected_item_position";
+    public static final String KEY_API_ERROR = "api_error";
 
     private GridView gridView;
 
     private List<MovieResult> result_data = null;
+    private int selected_item_position;
     private TextView textView_no_movies_found;
+    private Snackbar snackbar;
+
     private MovieResultAdapter movieResultAdapter;
     private Boolean isTaskRunning;
     private String sort_by;
+    private String api_error;
     private Cursor cursor;
+
+    public interface Callback {
+        public void OnItemSelected(MovieResult movieResult, String sort_by);
+        public void OnNoMoviesFound();
+    }
 
     public MovieFragment() {
     }
@@ -47,8 +57,13 @@ public class MovieFragment extends Fragment {
     public void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
 
-        // MovieResult data will be stored in ParcelableArrayList in order to prevent another API call
+        // Data will be stored in ParcelableArrayList in order to prevent another API call
         outState.putParcelableArrayList(KEY_RESULT_DATA, new ArrayList<>(result_data));
+        outState.putString(KEY_API_ERROR,api_error);
+
+        if (selected_item_position != GridView.INVALID_POSITION) {
+            outState.putInt(KEY_SELECTED_ITEM_POSITION, selected_item_position);
+        }
     }
 
     @Override
@@ -95,10 +110,32 @@ public class MovieFragment extends Fragment {
         if (savedInstanceState != null) {
             // Retrieve result data from ParcelableArrayList
             result_data = savedInstanceState.getParcelableArrayList(KEY_RESULT_DATA);
+            selected_item_position = savedInstanceState.getInt(KEY_SELECTED_ITEM_POSITION);
+            api_error = savedInstanceState.getString(KEY_API_ERROR);
 
-            // Use the custom adapter to the result data visible in the GUI
-            movieResultAdapter = new MovieResultAdapter(getActivity(), R.layout.item_gridview_movie_poster, result_data);
-            gridView.setAdapter(movieResultAdapter);
+            if (api_error != null) {
+                snackbar = Snackbar.make(getView(), api_error, Snackbar.LENGTH_INDEFINITE);
+
+                snackbar.setAction(getString(R.string.button_reload), new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        FetchMoviesTask fetchMoviesTask = new FetchMoviesTask();
+                        fetchMoviesTask.execute(sort_by);
+                    }
+                });
+
+                snackbar.show();
+            } else {
+                // Use the custom adapter to the result data visible in the GUI
+                if (result_data.size() != 0) {
+                    movieResultAdapter = new MovieResultAdapter(getActivity(), R.layout.item_gridview_movie_poster, result_data);
+                    gridView.setAdapter(movieResultAdapter);
+                }
+                else
+                {
+                    textView_no_movies_found.setVisibility(TextView.VISIBLE);
+                }
+            }
         }
         else
         // If no InstanceState is present, start the custom AsyncTask in order to retrieve data from the API
@@ -113,14 +150,17 @@ public class MovieFragment extends Fragment {
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 MovieResult result = movieResultAdapter.getItem(position);
 
-                Intent sendResultToMovieDetailActivity = new Intent(getActivity(), MovieDetailActivity.class)
-                        .putExtra("result", result)
-                        .putExtra("sort_by", sort_by);
+                selected_item_position = position;
 
-                startActivity(sendResultToMovieDetailActivity);
+                ((Callback) getActivity()).OnItemSelected(result, sort_by);
             }
         });
 
+    }
+
+    public void RefreshMovies() {
+        FetchMoviesTask fetchMoviesTask = new FetchMoviesTask();
+        fetchMoviesTask.execute(sort_by);
     }
 
     private class FetchMoviesTask extends AsyncTask<String, Void, List<MovieResult>> {
@@ -135,6 +175,7 @@ public class MovieFragment extends Fragment {
             super.onPreExecute();
 
             isTaskRunning = true;
+            api_error = null;
 
             textView_no_movies_found.setVisibility(TextView.GONE);
 
@@ -194,6 +235,7 @@ public class MovieFragment extends Fragment {
                 } catch (RetrofitError e) {
 
                     retrofitError = e;
+                    api_error = retrofitError.getMessage();
                     page = new MoviePage();
 
                 }
@@ -211,14 +253,17 @@ public class MovieFragment extends Fragment {
             super.onPostExecute(results);
 
             result_data = results;
-            Snackbar snackbar = null;
 
             // Use the custom adapter to the result data visible in the GUI
             movieResultAdapter = new MovieResultAdapter(getActivity(), R.layout.item_gridview_movie_poster, result_data);
             gridView.setAdapter(movieResultAdapter);
 
+            if (selected_item_position != GridView.INVALID_POSITION) {
+                gridView.setSelection(selected_item_position);
+            }
+
             // If the API call didn't work out as expected Snackbar will appear
-            if (retrofitError != null) {
+                if (retrofitError != null) {
 
                 snackbar = Snackbar.make(getView(), retrofitError.getMessage(), Snackbar.LENGTH_INDEFINITE);
 
@@ -245,6 +290,10 @@ public class MovieFragment extends Fragment {
 
             if (results.size() == 0) {
                 textView_no_movies_found.setVisibility(TextView.VISIBLE);
+
+                if (MovieActivity.twopanes) {
+                    ((Callback) getActivity()).OnNoMoviesFound();
+                }
             }
 
             // AsyncTask is done, so we set isTaskRunning back to false

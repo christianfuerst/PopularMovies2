@@ -16,7 +16,7 @@
     </style>
 
     <style name="MovieGridStyle">
-
+        <item name="android:choiceMode">singleChoice</item>
     </style>
     
 </resources>
