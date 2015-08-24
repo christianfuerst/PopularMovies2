@@ -273,6 +273,14 @@ public class MovieDetailFragment extends Fragment {
                     ShowVideoResults(video_result_data);
                     ShowReviewResults(review_result_data);
 
+                    if (video_result_data.size() == 0) {
+                        textView_video_unavailable.setVisibility(View.VISIBLE);
+                    }
+
+                    if (review_result_data.size() == 0) {
+                        textView_review_unavailable.setVisibility(View.VISIBLE);
+                    }
+
                     // Update favorite Button
                     if (isFavorite) {
                         button_favorite.setText(getText(R.string.details_movie_favorite_remove));
